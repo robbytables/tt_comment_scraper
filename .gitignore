@@ -1,0 +1,5 @@
+tiktok_comments_raw.json
+tiktok_comments_analysis.csv
+ttscrape/
+__pycache__/
+tiktok_scraper_debug.log
