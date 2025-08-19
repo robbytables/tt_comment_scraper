@@ -61,14 +61,14 @@ class TikTokCommentScraper:
         """Try to click various load more buttons"""
 
         load_more_patterns = [
-            # "//div[contains(text(), 'View more comments')]",
-            # "//div[contains(text(), 'Load more')]", 
-            # "//div[contains(text(), 'Show more')]",
-            # "//button[contains(text(), 'View more')]",
-            # "//button[contains(text(), 'Load more')]",
-            # "*[data-e2e='comment-load-more']",
-            # "*[class*='load-more']",
-            # "*[class*='LoadMore']"
+            "//div[contains(text(), 'View more comments')]",
+            "//div[contains(text(), 'Load more')]", 
+            "//div[contains(text(), 'Show more')]",
+            "//button[contains(text(), 'View more')]",
+            "//button[contains(text(), 'Load more')]",
+            "*[data-e2e='comment-load-more']",
+            "*[class*='load-more']",
+            "*[class*='LoadMore']",
             "div[class*='ViewRepliesContainer'] span"
         ]
         
@@ -104,14 +104,13 @@ class TikTokCommentScraper:
         counts = {}
         
         selectors = [
-        #     "[data-e2e='comment-item']",
-        #     "[data-e2e='comment-level-1']", 
-        #     "div[class*='comment']",
-        #     "li[class*='comment']",
-        #     "*[class*='CommentItem']",
-        #     "*[class*='comment-item']",
-        #     "*[class*='Comment']"
-        "[data-e2e^='comment-level-]"
+            "[data-e2e='comment-item']",
+            "[data-e2e^='comment-level-]", 
+            "div[class*='comment']",
+            "li[class*='comment']",
+            "*[class*='CommentItem']",
+            "*[class*='comment-item']",
+            "*[class*='Comment']"
         ]
         
         for selector in selectors:
@@ -237,21 +236,21 @@ class TikTokCommentScraper:
         metadata_selectors = {
             'title': [
                 "[data-e2e='browse-video-desc'] span",
-                # "[data-e2e='video-desc']", 
-                # "h1[data-e2e='browse-video-desc']",
-                # "*[class*='VideoUserCardTitle']",
-                # "*[class*='video-desc']"
+                "[data-e2e='video-desc']", 
+                "h1[data-e2e='browse-video-desc']",
+                "*[class*='VideoUserCardTitle']",
+                "*[class*='video-desc']"
             ],
             'author': [
                 "[data-e2e='browse-username']",
-                # "[data-e2e='video-author-uniqueid']",
-                # "*[class*='author']",
-                # "*[class*='username']"
+                "[data-e2e='video-author-uniqueid']",
+                "*[class*='author']",
+                "*[class*='username']"
             ],
             'like_count': [
                 "[data-e2e='like-count']",
-                # "*[class*='like-count']",
-                # "*[class*='LikeCount']"
+                "*[class*='like-count']",
+                "*[class*='LikeCount']"
             ]
         }
         
@@ -278,9 +277,9 @@ class TikTokCommentScraper:
         # Try multiple selector strategies
         strategies = [
             self.strategy_data_attributes,
-            # self.strategy_class_names,
-            # self.strategy_text_content,
-            # self.strategy_generic_divs
+            self.strategy_class_names,
+            self.strategy_text_content,
+            self.strategy_generic_divs
         ]
         
         for i, strategy in enumerate(strategies):
@@ -301,7 +300,7 @@ class TikTokCommentScraper:
         """Strategy 1: Use data-e2e attributes"""
         comments = []
         selectors = [
-            # "[data-e2e='comment-item']",
+            "[data-e2e='comment-item']",
             "[data-e2e^='comment-level-']"
         ]
         
@@ -316,8 +315,7 @@ class TikTokCommentScraper:
                 logger.debug(f"Data attribute strategy failed for {selector}: {e}")
                 
         return comments
-
-    '''      
+     
     def strategy_class_names(self):
         """Strategy 2: Use class name patterns"""
         comments = []
@@ -390,7 +388,6 @@ class TikTokCommentScraper:
             logger.debug(f"Generic strategy failed: {e}")
             
         return comments
-    '''
         
     def extract_from_elements(self, elements, strategy_name):
         """Extract comment data from a list of elements"""
@@ -418,30 +415,30 @@ class TikTokCommentScraper:
         field_selectors = {
             'username': [
                 "[data-e2e^='comment-username'] a p",
-                # "*[class*='username']", 
-                # "*[class*='Username']",
-                # "*[class*='author']"
+                "*[class*='username']", 
+                "*[class*='Username']",
+                "*[class*='author']"
             ],
             'text': [
-                "[data-e2e^=comment-level-] span"
-                # "[data-e2e='comment-text']",
-                # "*[class*='comment-text']",
-                # "*[class*='CommentText']", 
-                # "*[class*='text']",
-                # "span",
-                # "p"
+                "[data-e2e^=comment-level-] span",
+                "[data-e2e='comment-text']",
+                "*[class*='comment-text']",
+                "*[class*='CommentText']", 
+                "*[class*='text']",
+                "span",
+                "p"
             ],
             'likes': [
-                "[class=*='LikeContainer] span"
-                # "[data-e2e='comment-like-count']",
-                # "*[class*='like']",
-                # "*[class*='Like']"
+                "[class=*='LikeContainer] span",
+                "[data-e2e='comment-like-count']",
+                "*[class*='like']",
+                "*[class*='Like']"
             ],
             'timestamp': [
-                "div[class*='commentSubContentWrapper] span:nth-of-type(1)"
-                # "*[class*='time']",
-                # "*[class*='Time']",
-                # "*[class*='date']"
+                "div[class*='commentSubContentWrapper] span:nth-of-type(1)",
+                "*[class*='time']",
+                "*[class*='Time']",
+                "*[class*='date']"
             ]
         }
         
