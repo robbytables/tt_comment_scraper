@@ -1,7 +1,9 @@
 import pandas as pd
+import hashlib
 import json
 import time
 import random
+import re
 from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -64,21 +66,51 @@ class TikTokCommentScraper:
             logger.debug(f"Waiting {delay:.2f} seconds...")
         time.sleep(delay)
 
+    def _matches_reply_pattern(self, text):
+        """Check if the text matches our specific reply expansion patterns"""
+        text = text.strip()
+
+        # Pattern 1: "View 1 reply"
+        if text == "View 1 reply":
+            return True
+
+        # Pattern 2: "View X replies" (X is any number > 1)
+        if re.match(r"^View \d+ replies$", text):
+            return True
+
+        # Pattern 3: "View X More" (X is any number)
+        if re.match(r"^View \d+ more$", text):
+            return True
+
+        return False
+
     def try_click_load_more(self):
         """Try to click various load more buttons"""
         load_more_patterns = [
-            "//div[contains(text(), 'View more comments')]",
-            "//div[contains(text(), 'Load more')]",
-            "//div[contains(text(), 'Show more')]",
-            "//button[contains(text(), 'View more')]",
-            "//button[contains(text(), 'Load more')]",
-            "*[data-e2e='comment-load-more']",
-            "*[class*='load-more']",
-            "*[class*='LoadMore']",
-            "div[class*='ViewRepliesContainer'] span"
+            # Original patterns for main comment loading
+            # "//div[contains(text(), 'View more comments')]",
+            # "//div[contains(text(), 'Load more')]",
+            # "//div[contains(text(), 'Show more')]",
+            # "//button[contains(text(), 'View more')]",
+            # "//button[contains(text(), 'Load more')]",
+            # "*[data-e2e='comment-load-more']",
+            # "*[class*='load-more']",
+            # "*[class*='LoadMore']",
+            # Specific patterns for reply expansion
+            # "View 1 reply"
+            "//span[normalize-space(text())='View 1 reply']",
+            "//div[normalize-space(text())='View 1 reply']",
+            "//button[normalize-space(text())='View 1 reply']",
+            # "View X replies" (where X is any number > 1)
+            "//span[starts-with(normalize-space(text()), 'View ') and contains(normalize-space(text()), ' replies')]",
+            "//div[starts-with(normalize-space(text()), 'View ') and contains(normalize-space(text()), ' replies')]",
+            "//button[starts-with(normalize-space(text()), 'View ') and contains(normalize-space(text()), ' replies')]",
+            # "View X More" (where X is any number)
+            "//span[starts-with(normalize-space(text()), 'View ') and contains(normalize-space(text()), ' more')]",
+            "//div[starts-with(normalize-space(text()), 'View ') and contains(normalize-space(text()), ' more')]",
+            "//button[starts-with(normalize-space(text()), 'View ') and contains(normalize-space(text()), ' more')]",
         ]
 
-        clicked = False
         for pattern in load_more_patterns:
             try:
                 if pattern.startswith("//"):
@@ -88,22 +120,20 @@ class TikTokCommentScraper:
 
                 for button in buttons:
                     try:
+                        text = button.text.strip()
+                        if not self._matches_reply_pattern(text):
+                            continue
+
                         if button.is_displayed() and button.is_enabled():
+
                             self.driver.execute_script("arguments[0].click();", button)
-                            logger.debug(f"Clicked load more button: {pattern}")
-                            clicked = True
                             self.random_delay(2, 4)
-                            break
+
                     except Exception as e:
                         logger.debug(f"Failed to click button: {e}")
 
-                if clicked:
-                    break
-
             except Exception as e:
                 logger.debug(f"Error finding load more buttons with {pattern}: {e}")
-
-        return clicked
 
     def count_comments_multiple_methods(self):
         """Count comments using multiple selector strategies"""
@@ -112,11 +142,11 @@ class TikTokCommentScraper:
         selectors = [
             "[data-e2e='comment-item']",
             "[data-e2e='comment-level-1']",
+            "[data-e2e^='comment-level-']",  # This includes all reply levels
             "div[class*='comment']",
             "li[class*='comment']",
             "*[class*='CommentItem']",
             "*[class*='comment-item']",
-            "*[class*='Comment']",
         ]
 
         for selector in selectors:
@@ -138,7 +168,7 @@ class TikTokCommentScraper:
 
         return max_count
 
-    def scroll_to_load_comments(self, max_scrolls=50, scroll_pause=3):
+    def scroll_to_load_comments(self, max_scrolls=500, scroll_pause=2):
         """
         Scroll down to load all comments with enhanced detection
 
@@ -289,223 +319,101 @@ class TikTokCommentScraper:
             logger.debug("=== STARTING COMMENT EXTRACTION ===")
 
         # Try multiple selector strategies
-        strategies = [
-            self.strategy_data_attributes,
-            self.strategy_class_names,
-            self.strategy_text_content,
-            self.strategy_generic_divs,
-        ]
+        # strategies = [
+        #     self.strategy_data_attributes,
+        #     self.strategy_class_names,
+        #     self.strategy_text_content,
+        #     self.strategy_generic_divs,
+        # ]
 
-        breakpoint()
-        for i, strategy in enumerate(strategies):
-            logger.debug(f"Trying extraction strategy {i+1}")
-            comments = strategy()
-            if comments:
-                logger.info(
-                    f"Strategy {i+1} successful: extracted {len(comments)} comments"
-                )
-                break
-            else:
-                logger.debug(f"Strategy {i+1} failed")
+        comments = self.strategy_data_attribute()
+        if comments:
+            logger.info(f"Strategy successful: extracted {len(comments)} comments")
+        else:
+            logger.debug("Strategy failed")
 
         if not comments:
             logger.error("ALL EXTRACTION STRATEGIES FAILED")
 
         return comments
 
-    def strategy_data_attributes(self):
-        """Strategy 1: Use data-e2e attributes"""
+    def strategy_data_attribute(self):
+        """Strategy 0: Just use the one data-e2e attribute"""
         comments = []
-        selectors = ["[data-e2e='comment-item']", "[data-e2e='comment-level-1']", "[data-e2e^='comment-level-']"]
-
-        for selector in selectors:
-            try:
-                elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
-                if elements:
-                    logger.debug(
-                        f"Found {len(elements)} comment elements with {selector}"
-                    )
-                    breakpoint()
-                    comments = self.extract_from_elements(elements, "data-attributes")
-                    break
-            except Exception as e:
-                logger.debug(f"Data attribute strategy failed for {selector}: {e}")
-
-        return comments
-
-    def strategy_class_names(self):
-        """Strategy 2: Use class name patterns"""
-        comments = []
-        selectors = [
-            "*[class*='CommentItem']",
-            "*[class*='comment-item']",
-            "div[class*='comment']",
-            "li[class*='comment']",
-        ]
-
-        for selector in selectors:
-            try:
-                elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
-                if elements:
-                    logger.debug(
-                        f"Found {len(elements)} comment elements with {selector}"
-                    )
-                    comments = self.extract_from_elements(elements, "class-names")
-                    break
-            except Exception as e:
-                logger.debug(f"Class name strategy failed for {selector}: {e}")
-
-        return comments
-
-    def strategy_text_content(self):
-        """Strategy 3: Look for text content patterns"""
-        comments = []
-        try:
-            # Find all divs/spans that might contain comment text
-            all_elements = self.driver.find_elements(By.CSS_SELECTOR, "div, span, p")
-            potential_comments = []
-
-            for elem in all_elements:
-                text = elem.text.strip()
-                # Heuristic: looks like a comment if it's 3-500 chars and contains common words
-                if 3 <= len(text) <= 500 and any(
-                    word in text.lower()
-                    for word in [
-                        "the",
-                        "is",
-                        "and",
-                        "this",
-                        "that",
-                        "for",
-                        "you",
-                        "love",
-                        "great",
-                        "wow",
-                    ]
-                ):
-                    potential_comments.append(elem)
-
-            logger.debug(
-                f"Found {len(potential_comments)} potential comment elements by text content"
-            )
-
-            # Try to extract from these
-            if potential_comments:
-                comments = self.extract_from_elements(
-                    potential_comments[:50], "text-content"
-                )  # Limit to first 50
-
-        except Exception as e:
-            logger.debug(f"Text content strategy failed: {e}")
-
-        return comments
-
-    def strategy_generic_divs(self):
-        """Strategy 4: Generic div scanning"""
-        comments = []
+        selector = "[data-e2e^='comment-level-']"
 
         try:
-            # Look for structural patterns
-            container_selectors = [
-                "div[role='button']",
-                "div[tabindex]",
-                "article",
-                "section[class*='comment']",
-            ]
-
-            for selector in container_selectors:
-                elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
-                if elements:
-                    logger.debug(
-                        f"Trying generic strategy with {len(elements)} {selector} elements"
-                    )
-                    comments = self.extract_from_elements(elements, "generic")
-                    if comments:
-                        break
-
+            elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+            if elements:
+                logger.debug(f"Found {len(elements)} comment elements with {selector}")
+                comments = self.extract_comment_data_from_elements(elements)
         except Exception as e:
-            logger.debug(f"Generic strategy failed: {e}")
+            logger.debug(f"Data attribute strategy failed for {selector}: {e}")
 
         return comments
 
-    def extract_from_elements(self, elements, strategy_name):
-        """Extract comment data from a list of elements"""
+    def extract_comment_data_from_elements(self, elements):
         comments = []
 
-        logger.debug(
-            f"Extracting from {len(elements)} elements using {strategy_name} strategy"
-        )
-
-        for i, element in enumerate(elements[:100]):  # Limit to first 100
+        for i, element in enumerate(elements):
             try:
-                comment_data = self.extract_single_comment(element, i, strategy_name)
+                comment_data = self.extract_single_comment_data(element, i)
                 if comment_data:
                     comments.append(comment_data)
-
             except Exception as e:
                 logger.debug(f"Failed to extract comment {i}: {e}")
 
-        logger.debug(
-            f"Successfully extracted {len(comments)} comments using {strategy_name}"
-        )
+        logger.debug(f"Successfully extracted {len(comments)} comments")
         return comments
 
-    def extract_single_comment(self, element, index, strategy):
-        """Extract data from a single comment element"""
-        comment_data = {"comment_index": index, "extraction_strategy": strategy}
+    def extract_single_comment_data(self, element, index):
+        try:
+            parent = element.find_element(By.XPATH, "..")
+            comment_parts = parent.text.split("\n")
+            username = comment_parts[0]
+            text = comment_parts[1]
+            date = comment_parts[2]
+            likes = comment_parts[4]
+            identifier = hashlib.md5(parent.text.encode("utf-8")).hexdigest()
 
-        # Try multiple approaches for each field
-        field_selectors = {
-            "username": [
-                "[data-e2e^='comment-username'] a p",
-                "[data-e2e='comment-username']",
-                "*[class*='username']",
-                "*[class*='Username']",
-                "*[class*='author']",
-            ],
-            "text": [
-                "[data-e2e^=comment-level-] span",
-                "[data-e2e='comment-text']",
-                "*[class*='comment-text']",
-                "*[class*='CommentText']",
-                "*[class*='text']",
-                "span",
-                "p",
-            ],
-            "likes": [
-                "[class=*='LikeContainer] span",
-                "[data-e2e='comment-like-count']",
-                "*[class*='like']",
-                "*[class*='Like']",
-            ],
-            "timestamp": ["div[class*='commentSubContentWrapper] span:nth-of-type(1)", "*[class*='time']", "*[class*='Time']", "*[class*='date']"],
-        }
+            comment_data = {
+                "index": index,
+                "username": username,
+                "text": text,
+                "date": date,
+                "likes": likes,
+                "id": identifier,
+            }
 
-        # Extract each field
-        for field, selectors in field_selectors.items():
-            for selector in selectors:
-                try:
-                    child_elem = element.find_element(By.CSS_SELECTOR, selector)
-                    value = child_elem.text.strip()
-                    if value:
-                        comment_data[field] = value
-                        if self.debug and field in ["username", "text"]:
-                            logger.debug(f"  Found {field}: {value[:50]}...")
-                        break
-                except:
-                    continue
+            # Is this a reply or top level comment?
+            data_e2e = element.get_attribute("data-e2e")
+            if data_e2e:
+                match = re.match(r"^comment-level-(\d+)$", data_e2e)
+                if match and int(match.group(1)) > 1:  # This is a reply
 
-        # Fallback: if no text found, use element's direct text
-        if "text" not in comment_data:
-            direct_text = element.text.strip()
-            if direct_text and len(direct_text) > 3:
-                comment_data["text"] = direct_text
+                    # Get the ancestor that houses the OG comment and all replies
+                    ancestor = element.find_element(
+                        By.XPATH,
+                        "./ancestor::div[contains(@class, 'DivCommentObjectWrapper')]",
+                    )
 
-        # Only return if we found at least username or text
-        if comment_data.get("username") or comment_data.get("text"):
+                    # Now find the OG comment
+                    comment_level_1 = ancestor.find_element(
+                        By.XPATH, ".//*[@data-e2e='comment-level-1'][1]"
+                    )
+
+                    # Get the ID
+                    parent_id = hashlib.md5(
+                        comment_level_1.find_element(By.XPATH, "..").text.encode(
+                            "utf-8"
+                        )
+                    ).hexdigest()
+                    comment_data["parent_id"] = parent_id
+
             return comment_data
-        else:
-            return None
+        except Exception as e:
+            logger.error(f"Failure in extracting comment data {e}")
+            return {}
 
     def scrape_urls_from_csv(self, csv_file, url_column="url", output_file=None):
         """
